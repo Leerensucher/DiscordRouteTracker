@@ -1,0 +1,6 @@
+{
+  "version": "0.1.0",
+  "files": {
+    "load.py": "https://raw.githubusercontent.com/Leerensucher/DiscordRouteTracker/main/DiscordRouteTracker/load.py"
+  }
+}
