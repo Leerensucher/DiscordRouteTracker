@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover - handled at runtime for users.
 
 
 PLUGIN_NAME = "DiscordRouteTracker"
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.1.1"
 STATE_FILE = "route_state.json"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Leerensucher/DiscordRouteTracker/main/DiscordRouteTracker/update_manifest.json"
 UPDATE_CHECK_ON_START = True
@@ -74,6 +74,7 @@ DEFAULT_STATE: Dict[str, Any] = {
     "carrier": copy.deepcopy(DEFAULT_TRACKER_STATE),
 }
 DEFAULT_STATE["autopost"] = False
+DEFAULT_STATE["plugin_enabled"] = True
 DEFAULT_STATE["ship"]["active_ship_name"] = ""
 DEFAULT_STATE["ship"]["image_urls_by_ship"] = {}
 DEFAULT_STATE["carrier"]["active_carrier_name"] = ""
@@ -92,6 +93,8 @@ game_running = False
 status_var: Optional["tk.StringVar"] = None
 status_label_widget: Optional[Any] = None
 autopost_var: Optional["tk.BooleanVar"] = None
+plugin_enabled_var: Optional["tk.BooleanVar"] = None
+main_app_frame: Optional[Any] = None
 ship_poster_name_var: Optional["tk.StringVar"] = None
 ship_webhook_var: Optional["tk.StringVar"] = None
 ship_target_var: Optional["tk.StringVar"] = None
@@ -133,11 +136,15 @@ def plugin_app(parent: Any) -> Any:
     if tk is None:
         return None
 
-    global status_var, status_label_widget, autopost_var
+    global status_var, status_label_widget, autopost_var, main_app_frame
     status_var = tk.StringVar(value="Spiel erkannt." if game_running else "Warte auf Spiel.")
     autopost_var = tk.BooleanVar(value=autopost_enabled())
 
-    frame = make_frame(parent)
+    outer_frame = make_frame(parent)
+    frame = make_frame(outer_frame)
+    main_app_frame = frame
+    frame.grid(row=0, column=0, sticky="ew")
+    outer_frame.columnconfigure(0, weight=1)
     frame.columnconfigure(0, weight=1)
     frame.columnconfigure(1, weight=1)
 
@@ -179,31 +186,37 @@ def plugin_app(parent: Any) -> Any:
     carrier_reset_button.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
     main_controls.append(carrier_reset_button)
 
+    action_frame = make_frame(frame)
+    action_frame.columnconfigure(0, weight=1)
+    action_frame.columnconfigure(1, weight=1)
+    action_frame.columnconfigure(2, weight=1)
+    action_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=0, pady=0)
+
     make_button(
-        frame,
+        action_frame,
         text="Einstellungen",
         command=lambda: open_settings_dialog(parent),
-    ).grid(row=2, column=0, sticky="ew", padx=2, pady=2)
+    ).grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+    make_button(
+        action_frame,
+        text="Update prüfen",
+        command=lambda: check_for_updates(silent=False),
+    ).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
     make_checkbutton(
-        frame,
+        action_frame,
         text="Autopost",
         variable=autopost_var,
         command=autopost_changed,
-    ).grid(row=2, column=1, sticky="w", padx=6, pady=2)
-    make_button(
-        frame,
-        text="Update prüfen",
-        command=lambda: check_for_updates(silent=False),
-    ).grid(row=3, column=0, columnspan=2, sticky="ew", padx=2, pady=2)
+    ).grid(row=0, column=2, sticky="w", padx=6, pady=2)
     status_label_widget = make_status_label(frame, textvariable=status_var)
     status_label_widget.grid(
-        row=4, column=0, columnspan=2, sticky="w", padx=2, pady=(4, 2)
+        row=3, column=0, columnspan=2, sticky="w", padx=2, pady=(4, 2)
     )
     update_ui_enabled()
     if UPDATE_CHECK_ON_START:
         check_for_updates(silent=True)
 
-    return frame
+    return outer_frame
 
 
 def plugin_prefs(parent: Any, cmdr: str, is_beta: bool) -> Any:
@@ -221,7 +234,9 @@ def plugin_prefs(parent: Any, cmdr: str, is_beta: bool) -> Any:
     global active_carrier_label_var
     global ship_image_mapping_vars, carrier_image_mapping_vars
     global ship_image_mapping_tree, carrier_image_mapping_tree
+    global plugin_enabled_var
 
+    plugin_enabled_var = tk.BooleanVar(value=plugin_enabled())
     ship_poster_name_var = tk.StringVar(value=state["ship"].get("poster_name", ""))
     ship_webhook_var = tk.StringVar(value=state["ship"].get("webhook_url", ""))
     ship_target_var = tk.StringVar(value=state["ship"].get("target_system", ""))
@@ -239,6 +254,12 @@ def plugin_prefs(parent: Any, cmdr: str, is_beta: bool) -> Any:
 
     frame = make_frame(parent)
     frame.columnconfigure(1, weight=1)
+
+    make_checkbutton(
+        frame,
+        text="Plugin aktiv",
+        variable=plugin_enabled_var,
+    ).grid(row=0, column=0, columnspan=2, sticky="w", padx=4, pady=(2, 8))
 
     rows = [
         ("Aktuelles Schiff", active_ship_label_var, False),
@@ -262,7 +283,7 @@ def plugin_prefs(parent: Any, cmdr: str, is_beta: bool) -> Any:
     carrier_image_mapping_vars.clear()
     ship_image_mapping_tree = None
     carrier_image_mapping_tree = None
-    for row_index, row in enumerate(rows):
+    for row_index, row in enumerate(rows, start=1):
         label = row[0]
         variable = row[1]
         editable = bool(row[2]) if len(row) > 2 else True
@@ -276,7 +297,7 @@ def plugin_prefs(parent: Any, cmdr: str, is_beta: bool) -> Any:
                 row=row_index, column=1, sticky="w", padx=4, pady=2
             )
 
-    next_row = len(rows)
+    next_row = len(rows) + 1
     ship_table = create_image_table(
         frame,
         next_row,
@@ -302,6 +323,7 @@ def prefs_changed(cmdr: str, is_beta: bool) -> None:
 
     apply_pref_vars()
     save_state()
+    update_ui_enabled()
     active_ship = current_ship_name or str(state["ship"].get("active_ship_name") or "")
     if active_ship and ship_image_var is not None:
         set_status(f"Einstellungen gespeichert. Schiffbild für {active_ship} gemerkt.")
@@ -323,6 +345,8 @@ def journal_entry(
     update_session_context(cmdr, system, entry, state_data)
     update_active_ship(entry, state_data)
     update_active_carrier(entry, state_data)
+    if not plugin_enabled():
+        return
 
     event = entry.get("event")
     if event == "NavRoute":
@@ -351,6 +375,9 @@ def load_state() -> Dict[str, Any]:
         return loaded
 
     loaded["autopost"] = bool(raw.get("autopost", loaded.get("autopost", False)))
+    loaded["plugin_enabled"] = bool(
+        raw.get("plugin_enabled", loaded.get("plugin_enabled", True))
+    )
 
     for kind in TRACKER_KINDS:
         raw_tracker = raw.get(kind, {})
@@ -549,6 +576,9 @@ def reset_tracker(kind: str) -> None:
 def send_initial_embed(kind: str) -> None:
     """Create or resend the initial Discord embed and store its message ID."""
     if kind not in TRACKER_KINDS:
+        return
+    if not plugin_enabled():
+        set_status("Plugin ist deaktiviert.")
         return
 
     if not game_running:
@@ -1172,6 +1202,15 @@ def planned_distance_text(kind: str) -> str:
 
 def update_ui_enabled() -> None:
     """Enable plugin controls only after EDMC has seen the running game."""
+    if main_app_frame is not None:
+        try:
+            if plugin_enabled():
+                main_app_frame.grid()
+            else:
+                main_app_frame.grid_remove()
+        except Exception:
+            pass
+
     desired_state = "normal" if game_running else "disabled"
     for widget in main_controls + pref_controls:
         set_widget_state(widget, desired_state)
@@ -1187,6 +1226,10 @@ def update_ui_enabled() -> None:
 
 def autopost_enabled() -> bool:
     return bool(state.get("autopost", False))
+
+
+def plugin_enabled() -> bool:
+    return bool(state.get("plugin_enabled", True))
 
 
 def autopost_changed() -> None:
@@ -1281,6 +1324,7 @@ def open_settings_dialog(parent: Any) -> None:
     dialog = tk.Toplevel(parent)
     dialog.title("DiscordRouteTracker Einstellungen")
     dialog.columnconfigure(0, weight=1)
+    apply_skin(dialog, parent, "frame")
     try:
         dialog.transient(parent)
         dialog.grab_set()
@@ -1292,6 +1336,7 @@ def open_settings_dialog(parent: Any) -> None:
     content.columnconfigure(1, weight=1)
 
     dialog_vars = {
+        "plugin_enabled": tk.BooleanVar(value=plugin_enabled()),
         "ship_poster_name": tk.StringVar(value=str(state["ship"].get("poster_name") or "")),
         "ship_webhook": tk.StringVar(value=str(state["ship"].get("webhook_url") or "")),
         "ship_target": tk.StringVar(value=str(state["ship"].get("target_system") or "")),
@@ -1307,6 +1352,7 @@ def open_settings_dialog(parent: Any) -> None:
     }
 
     rows = [
+        ("Plugin aktiv", dialog_vars["plugin_enabled"], True, "check"),
         ("Aktuelles Schiff", tk.StringVar(value=active_vehicle_text("ship")), False),
         ("Schiff Discord-Name", dialog_vars["ship_poster_name"], True),
         ("Schiff Webhook", dialog_vars["ship_webhook"], True),
@@ -1323,7 +1369,17 @@ def open_settings_dialog(parent: Any) -> None:
         ("Carrier Bild-URL", dialog_vars["carrier_image"], True),
     ]
 
-    for row_index, (label, variable, editable) in enumerate(rows):
+    for row_index, row in enumerate(rows):
+        label = row[0]
+        variable = row[1]
+        editable = bool(row[2])
+        control_type = str(row[3]) if len(row) > 3 else "entry"
+        if control_type == "check":
+            make_checkbutton(content, text=label, variable=variable).grid(
+                row=row_index, column=0, columnspan=2, sticky="w", padx=4, pady=(2, 8)
+            )
+            continue
+
         make_label(content, text=label).grid(row=row_index, column=0, sticky="w", padx=4, pady=2)
         if editable:
             make_entry(content, textvariable=variable, width=70).grid(
@@ -1352,6 +1408,7 @@ def open_settings_dialog(parent: Any) -> None:
     buttons.grid(row=carrier_table["next_row"], column=0, columnspan=2, sticky="e", pady=(10, 0))
 
     def save_dialog() -> None:
+        state["plugin_enabled"] = bool(dialog_vars["plugin_enabled"].get())
         state["ship"]["poster_name"] = dialog_vars["ship_poster_name"].get().strip()
         state["ship"]["webhook_url"] = dialog_vars["ship_webhook"].get().strip()
         state["ship"]["target_system"] = dialog_vars["ship_target"].get().strip()
@@ -1373,6 +1430,7 @@ def open_settings_dialog(parent: Any) -> None:
         refresh_active_image_from_mapping("ship")
         refresh_active_image_from_mapping("carrier")
         save_state()
+        update_ui_enabled()
         refresh_pref_vars("ship")
         refresh_pref_vars("carrier")
         set_status("Einstellungen gespeichert.")
@@ -1380,6 +1438,170 @@ def open_settings_dialog(parent: Any) -> None:
 
     make_button(buttons, text="Speichern", command=save_dialog).grid(row=0, column=0, padx=4)
     make_button(buttons, text="Abbrechen", command=dialog.destroy).grid(row=0, column=1, padx=4)
+
+
+class ImageMappingTable:
+    def __init__(self, parent: Any, image_urls: Dict[str, str]) -> None:
+        self.parent = parent
+        self.frame = make_frame(parent)
+        self.frame.columnconfigure(0, weight=0)
+        self.frame.columnconfigure(1, weight=1)
+        self.rows: List[Dict[str, Any]] = []
+        self.selected_id = ""
+        self.next_id = 1
+        self.on_select: Optional[Any] = None
+        self.name_column_width = table_name_column_width(image_urls)
+
+        self.header_name = make_table_cell(self.frame, "Name", is_header=True)
+        apply_table_cell_width(self.header_name, self.name_column_width)
+        self.header_name.grid(row=0, column=0, sticky="ew", padx=(0, 1), pady=(0, 1))
+        self.header_url = make_table_cell(self.frame, "Bild-URL", is_header=True)
+        self.header_url.grid(row=0, column=1, sticky="ew", padx=(1, 0), pady=(0, 1))
+
+        self.body = make_frame(self.frame)
+        self.body.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        self.body.columnconfigure(0, weight=0)
+        self.body.columnconfigure(1, weight=1)
+        self.filler = make_frame(self.body)
+        self.filler.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        try:
+            self.filler.configure(height=92)
+        except Exception:
+            pass
+
+    def add_row(self, name: str, image_url: str) -> str:
+        item_id = str(self.next_id)
+        self.next_id += 1
+        row = {"id": item_id, "name": name, "url": image_url, "labels": []}
+        self.rows.append(row)
+        self.update_name_column_width()
+        self.render_rows()
+        return item_id
+
+    def set_row(self, item_id: str, name: str, image_url: str) -> None:
+        for row in self.rows:
+            if row["id"] == item_id:
+                row["name"] = name
+                row["url"] = image_url
+                break
+        self.update_name_column_width()
+        self.render_rows()
+
+    def delete(self, item_id: str) -> None:
+        self.rows = [row for row in self.rows if row["id"] != item_id]
+        if self.selected_id == item_id:
+            self.selected_id = ""
+        self.update_name_column_width()
+        self.render_rows()
+
+    def selected_item(self) -> str:
+        return self.selected_id
+
+    def selection_set(self, item_id: str) -> None:
+        self.selected_id = item_id
+        self.render_rows()
+        if self.on_select is not None:
+            self.on_select()
+
+    def item_values(self, item_id: str) -> tuple:
+        for row in self.rows:
+            if row["id"] == item_id:
+                return str(row["name"]), str(row["url"])
+        return "", ""
+
+    def find_by_name(self, name: str) -> str:
+        for row in self.rows:
+            if str(row["name"]) == name:
+                return str(row["id"])
+        return ""
+
+    def rows_as_mapping(self) -> Dict[str, str]:
+        mapping: Dict[str, str] = {}
+        for row in self.rows:
+            name = str(row["name"]).strip()
+            image_url = str(row["url"]).strip()
+            if name and image_url:
+                mapping[name] = image_url
+        return mapping
+
+    def update_name_column_width(self) -> None:
+        self.name_column_width = table_name_column_width(
+            {str(row["name"]): str(row["url"]) for row in self.rows}
+        )
+        apply_table_cell_width(self.header_name, self.name_column_width)
+
+    def render_rows(self) -> None:
+        for child in self.body.winfo_children():
+            try:
+                child.destroy()
+            except Exception:
+                pass
+
+        if not self.rows:
+            self.filler = make_frame(self.body)
+            self.filler.grid(row=0, column=0, columnspan=2, sticky="nsew")
+            try:
+                self.filler.configure(height=92)
+            except Exception:
+                pass
+            return
+
+        for index, row in enumerate(self.rows):
+            selected = row["id"] == self.selected_id
+            name_label = make_table_cell(self.body, str(row["name"]), is_selected=selected)
+            url_label = make_table_cell(self.body, str(row["url"]), is_selected=selected)
+            apply_table_cell_width(name_label, self.name_column_width)
+            name_label.grid(row=index, column=0, sticky="ew", padx=(0, 1), pady=(0, 1))
+            url_label.grid(row=index, column=1, sticky="ew", padx=(1, 0), pady=(0, 1))
+            for label in (name_label, url_label):
+                label.bind("<Button-1>", lambda _event, item_id=row["id"]: self.selection_set(item_id))
+
+        self.filler = make_frame(self.body)
+        self.filler.grid(row=len(self.rows), column=0, columnspan=2, sticky="nsew")
+        try:
+            self.filler.configure(height=max(18, 92 - len(self.rows) * 24))
+        except Exception:
+            pass
+
+
+def make_table_cell(
+    parent: Any,
+    text: str,
+    is_header: bool = False,
+    is_selected: bool = False,
+) -> Any:
+    bg = skin_background(parent)
+    fg = skin_foreground(parent, bg)
+    if is_header:
+        cell_bg = "#101010" if is_dark_color(bg) else "#e6e6e6"
+    elif is_selected:
+        cell_bg = "#2f5d8c" if is_dark_color(bg) else "#c8ddf2"
+        fg = "#ffffff" if is_dark_color(bg) else "#000000"
+    else:
+        cell_bg = "#111111" if is_dark_color(bg) else "#ffffff"
+
+    label = tk.Label(
+        parent,
+        text=text,
+        anchor="w",
+        padx=6,
+        pady=3,
+        background=cell_bg,
+        foreground=readable_foreground(cell_bg, fg),
+    )
+    return label
+
+
+def table_name_column_width(image_urls: Dict[str, str]) -> int:
+    longest_name = max([len("Name")] + [len(str(name)) for name in image_urls])
+    return max(14, min(longest_name + 2, 36))
+
+
+def apply_table_cell_width(widget: Any, width: int) -> None:
+    try:
+        widget.configure(width=width)
+    except Exception:
+        pass
 
 
 def create_image_table(
@@ -1392,15 +1614,10 @@ def create_image_table(
         row=start_row, column=0, columnspan=2, sticky="w", padx=4, pady=(12, 2)
     )
 
-    tree = ttk.Treeview(parent, columns=("name", "url"), show="headings", height=5)
-    tree.heading("name", text="Name")
-    tree.heading("url", text="Bild-URL")
-    tree.column("name", width=180, stretch=False)
-    tree.column("url", width=480, stretch=True)
-    tree.grid(row=start_row + 1, column=0, columnspan=2, sticky="nsew", padx=4, pady=2)
-
+    tree = ImageMappingTable(parent, image_urls)
+    tree.frame.grid(row=start_row + 1, column=0, columnspan=2, sticky="nsew", padx=4, pady=2)
     for name, image_url in sorted(image_urls.items()):
-        tree.insert("", "end", values=(name, image_url))
+        tree.add_row(name, image_url)
 
     edit_frame = make_frame(parent)
     edit_frame.grid(row=start_row + 2, column=0, columnspan=2, sticky="ew", padx=4, pady=2)
@@ -1421,17 +1638,15 @@ def create_image_table(
     button_frame.grid(row=start_row + 3, column=0, columnspan=2, sticky="w", padx=4, pady=(0, 6))
 
     def selected_item() -> str:
-        selection = tree.selection()
-        return str(selection[0]) if selection else ""
+        return tree.selected_item()
 
     def fill_from_selection(_event: Any = None) -> None:
         item_id = selected_item()
         if not item_id:
             return
-        values = tree.item(item_id, "values")
-        if len(values) >= 2:
-            name_var.set(str(values[0]))
-            url_var.set(str(values[1]))
+        name, image_url = tree.item_values(item_id)
+        name_var.set(name)
+        url_var.set(image_url)
 
     def change_selected() -> None:
         item_id = selected_item()
@@ -1439,7 +1654,7 @@ def create_image_table(
         image_url = url_var.get().strip()
         if not item_id or not name:
             return
-        tree.item(item_id, values=(name, image_url))
+        tree.set_row(item_id, name, image_url)
 
     def add_entry() -> None:
         name = name_var.get().strip()
@@ -1448,10 +1663,10 @@ def create_image_table(
             return
         existing = find_tree_item_by_name(tree, name)
         if existing:
-            tree.item(existing, values=(name, image_url))
+            tree.set_row(existing, name, image_url)
             tree.selection_set(existing)
         else:
-            item_id = tree.insert("", "end", values=(name, image_url))
+            item_id = tree.add_row(name, image_url)
             tree.selection_set(item_id)
 
     def delete_selected() -> None:
@@ -1462,7 +1677,7 @@ def create_image_table(
         name_var.set("")
         url_var.set("")
 
-    tree.bind("<<TreeviewSelect>>", fill_from_selection)
+    tree.on_select = fill_from_selection
     make_button(button_frame, text="Ändern", command=change_selected).grid(row=0, column=0, padx=(0, 4))
     make_button(button_frame, text="Hinzufügen", command=add_entry).grid(row=0, column=1, padx=4)
     make_button(button_frame, text="Löschen", command=delete_selected).grid(row=0, column=2, padx=4)
@@ -1471,6 +1686,9 @@ def create_image_table(
 
 
 def find_tree_item_by_name(tree: Any, name: str) -> str:
+    if hasattr(tree, "find_by_name"):
+        return str(tree.find_by_name(name))
+
     for item_id in tree.get_children():
         values = tree.item(item_id, "values")
         if values and str(values[0]) == name:
@@ -1479,6 +1697,9 @@ def find_tree_item_by_name(tree: Any, name: str) -> str:
 
 
 def image_mapping_from_tree(tree: Any) -> Dict[str, str]:
+    if hasattr(tree, "rows_as_mapping"):
+        return tree.rows_as_mapping()
+
     image_urls: Dict[str, str] = {}
     for item_id in tree.get_children():
         values = tree.item(item_id, "values")
@@ -1539,14 +1760,6 @@ def make_frame(parent: Any) -> Any:
 
 
 def make_label(parent: Any, **kwargs: Any) -> Any:
-    if nb is not None and hasattr(nb, "Label"):
-        widget = nb.Label(parent, **kwargs)
-        apply_skin(widget, parent, "label")
-        return widget
-    if ttk is not None:
-        widget = ttk.Label(parent, **kwargs)
-        apply_skin(widget, parent, "label")
-        return widget
     widget = tk.Label(parent, **kwargs)
     apply_skin(widget, parent, "label")
     return widget
@@ -1559,14 +1772,6 @@ def make_status_label(parent: Any, **kwargs: Any) -> Any:
 
 
 def make_entry(parent: Any, **kwargs: Any) -> Any:
-    if nb is not None and hasattr(nb, "Entry"):
-        widget = nb.Entry(parent, **kwargs)
-        apply_skin(widget, parent, "entry")
-        return widget
-    if ttk is not None:
-        widget = ttk.Entry(parent, **kwargs)
-        apply_skin(widget, parent, "entry")
-        return widget
     widget = tk.Entry(parent, **kwargs)
     apply_skin(widget, parent, "entry")
     return widget
@@ -1587,6 +1792,10 @@ def make_button(parent: Any, **kwargs: Any) -> Any:
 def make_checkbutton(parent: Any, **kwargs: Any) -> Any:
     widget = tk.Checkbutton(parent, anchor="w", padx=4, pady=2, **kwargs)
     apply_skin(widget, parent, "checkbutton")
+    try:
+        widget.configure(borderwidth=0, highlightthickness=0)
+    except Exception:
+        pass
     return widget
 
 
@@ -1643,6 +1852,13 @@ def apply_skin(widget: Any, parent: Any, role: str) -> None:
             "background": entry_bg,
             "foreground": fg,
             "insertbackground": fg,
+            "disabledbackground": entry_bg,
+            "disabledforeground": fg,
+            "highlightbackground": bg,
+            "highlightcolor": "#343434" if is_dark_color(bg) else "#b8b8b8",
+            "highlightthickness": 1,
+            "relief": "solid",
+            "bd": 1,
         }
     elif role in ("button", "button_hover"):
         chosen_bg = active_bg if role == "button_hover" else button_bg
@@ -1663,6 +1879,56 @@ def apply_skin(widget: Any, parent: Any, role: str) -> None:
             widget.configure(**{option: value})
         except Exception:
             pass
+
+
+def apply_treeview_skin(parent: Any) -> str:
+    style_name = "DiscordRouteTracker.Treeview"
+    if ttk is None:
+        return style_name
+
+    bg = skin_background(parent)
+    fg = skin_foreground(parent, bg)
+    field_bg = "#111111" if is_dark_color(bg) else "#ffffff"
+    heading_bg = "#101010" if is_dark_color(bg) else "#e6e6e6"
+    selected_bg = "#2f5d8c" if is_dark_color(bg) else "#c8ddf2"
+    selected_fg = "#ffffff" if is_dark_color(bg) else "#000000"
+
+    try:
+        style = ttk.Style()
+        style.configure(
+            style_name,
+            background=field_bg,
+            fieldbackground=field_bg,
+            foreground=fg,
+            bordercolor=bg,
+            lightcolor=bg,
+            darkcolor=bg,
+            rowheight=22,
+        )
+        style.configure(
+            f"{style_name}.Heading",
+            background=heading_bg,
+            foreground=fg,
+            relief="flat",
+        )
+        style.map(
+            style_name,
+            background=[("selected", selected_bg)],
+            foreground=[("selected", selected_fg)],
+        )
+    except Exception:
+        pass
+    return style_name
+
+
+def configure_treeview_item_tags(tree: Any, parent: Any) -> None:
+    bg = skin_background(parent)
+    fg = skin_foreground(parent, bg)
+    field_bg = "#111111" if is_dark_color(bg) else "#ffffff"
+    try:
+        tree.tag_configure("normal", background=field_bg, foreground=fg)
+    except Exception:
+        pass
 
 
 def inherited_color(widget: Any, option_names: tuple) -> str:
@@ -1765,6 +2031,8 @@ def is_dark_color(color: str) -> bool:
 
 def apply_pref_vars() -> None:
     """Copy Tk preference variables into state when the preferences UI exists."""
+    if plugin_enabled_var is not None:
+        state["plugin_enabled"] = bool(plugin_enabled_var.get())
     if ship_poster_name_var is not None:
         state["ship"]["poster_name"] = ship_poster_name_var.get().strip()
     if ship_webhook_var is not None:
