@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover - handled at runtime for users.
 
 
 PLUGIN_NAME = "DiscordRouteTracker"
-PLUGIN_VERSION = "0.1.1"
+PLUGIN_VERSION = "0.1.2"
 STATE_FILE = "route_state.json"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Leerensucher/DiscordRouteTracker/main/DiscordRouteTracker/update_manifest.json"
 UPDATE_CHECK_ON_START = True
@@ -143,10 +143,7 @@ def plugin_app(parent: Any) -> Any:
     outer_frame = make_frame(parent)
     frame = make_frame(outer_frame)
     main_app_frame = frame
-    frame.grid(row=0, column=0, sticky="ew")
-    outer_frame.columnconfigure(0, weight=1)
-    frame.columnconfigure(0, weight=1)
-    frame.columnconfigure(1, weight=1)
+    frame.grid(row=0, column=0, sticky="w")
 
     main_controls.clear()
     send_controls.clear()
@@ -156,7 +153,7 @@ def plugin_app(parent: Any) -> Any:
         text="Schiff erstellen / senden",
         command=lambda: send_initial_embed("ship"),
     )
-    ship_send_button.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+    ship_send_button.grid(row=0, column=0, sticky="w", padx=2, pady=2)
     main_controls.append(ship_send_button)
     send_controls.append(ship_send_button)
     ship_send_controls.append(ship_send_button)
@@ -166,7 +163,7 @@ def plugin_app(parent: Any) -> Any:
         text="Carrier erstellen / senden",
         command=lambda: send_initial_embed("carrier"),
     )
-    carrier_send_button.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+    carrier_send_button.grid(row=0, column=1, sticky="w", padx=2, pady=2)
     main_controls.append(carrier_send_button)
     send_controls.append(carrier_send_button)
 
@@ -175,7 +172,7 @@ def plugin_app(parent: Any) -> Any:
         text="Schiff zurücksetzen",
         command=lambda: reset_tracker("ship"),
     )
-    ship_reset_button.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+    ship_reset_button.grid(row=1, column=0, sticky="w", padx=2, pady=2)
     main_controls.append(ship_reset_button)
 
     carrier_reset_button = make_button(
@@ -183,25 +180,22 @@ def plugin_app(parent: Any) -> Any:
         text="Carrier zurücksetzen",
         command=lambda: reset_tracker("carrier"),
     )
-    carrier_reset_button.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+    carrier_reset_button.grid(row=1, column=1, sticky="w", padx=2, pady=2)
     main_controls.append(carrier_reset_button)
 
     action_frame = make_frame(frame)
-    action_frame.columnconfigure(0, weight=1)
-    action_frame.columnconfigure(1, weight=1)
-    action_frame.columnconfigure(2, weight=1)
-    action_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=0, pady=0)
+    action_frame.grid(row=2, column=0, columnspan=2, sticky="w", padx=0, pady=0)
 
     make_button(
         action_frame,
         text="Einstellungen",
         command=lambda: open_settings_dialog(parent),
-    ).grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+    ).grid(row=0, column=0, sticky="w", padx=2, pady=2)
     make_button(
         action_frame,
         text="Update prüfen",
         command=lambda: check_for_updates(silent=False),
-    ).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+    ).grid(row=0, column=1, sticky="w", padx=2, pady=2)
     make_checkbutton(
         action_frame,
         text="Autopost",
@@ -1007,7 +1001,6 @@ def handle_nav_route(entry: Dict[str, Any]) -> None:
     planned_jumps = planned_jumps_from_nav_route(entry)
     planned_distance = planned_distance_from_nav_route(entry)
     target_system = target_system_from_nav_route(entry)
-    route_systems = route_systems_from_nav_route(entry)
     if planned_jumps <= 0 and planned_distance <= 0 and not target_system:
         return
 
@@ -1032,8 +1025,6 @@ def handle_nav_route(entry: Dict[str, Any]) -> None:
         tracker["planned_jumps"] = planned_jumps
     if planned_distance > 0:
         tracker["planned_distance"] = planned_distance
-    if route_systems:
-        tracker["route_systems"] = route_systems
     tracker["route_completed"] = False
     refresh_pref_vars("ship")
     if ship_planned_jumps_var is not None:
@@ -1107,25 +1098,6 @@ def target_system_from_nav_route(entry: Dict[str, Any]) -> str:
                 return system_name
 
     return ""
-
-
-def route_systems_from_nav_route(entry: Dict[str, Any]) -> List[str]:
-    route = entry.get("Route")
-    if not isinstance(route, list) or not route:
-        return []
-
-    systems = normalize_route_systems(
-        [
-            item.get("StarSystem")
-            for item in route
-            if isinstance(item, dict)
-        ]
-    )
-    if current_system_name and (
-        not systems or not same_system(systems[0], current_system_name)
-    ):
-        systems.insert(0, current_system_name)
-    return systems
 
 
 def planned_distance_from_nav_route(entry: Dict[str, Any]) -> float:
@@ -1779,7 +1751,7 @@ def make_entry(parent: Any, **kwargs: Any) -> Any:
 
 def make_button(parent: Any, **kwargs: Any) -> Any:
     command = kwargs.pop("command", None)
-    widget = tk.Label(parent, anchor="center", padx=8, pady=4, cursor="hand2", **kwargs)
+    widget = tk.Label(parent, anchor="center", padx=6, pady=3, cursor="hand2", **kwargs)
     widget._drt_command = command
     widget._drt_enabled = True
     widget.bind("<Button-1>", clickable_label_clicked)
@@ -2452,14 +2424,11 @@ def route_systems_for_embed(kind: str) -> List[str]:
     systems = normalize_route_systems(tracker.get("route_systems"))
     start_system = str(tracker.get("start_system") or "").strip()
     current_system = str(tracker.get("current_system") or "").strip()
-    target_system = str(tracker.get("target_system") or "").strip()
 
     if start_system and not any(same_system(item, start_system) for item in systems):
         systems.insert(0, start_system)
     if current_system and not any(same_system(item, current_system) for item in systems):
         systems.append(current_system)
-    if target_system and not any(same_system(item, target_system) for item in systems):
-        systems.append(target_system)
 
     return systems
 
