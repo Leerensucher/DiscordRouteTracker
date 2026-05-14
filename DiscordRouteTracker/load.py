@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover - handled at runtime for users.
 
 
 PLUGIN_NAME = "DiscordRouteTracker"
-PLUGIN_VERSION = "0.1.2"
+PLUGIN_VERSION = "0.1.3"
 STATE_FILE = "route_state.json"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Leerensucher/DiscordRouteTracker/main/DiscordRouteTracker/update_manifest.json"
 UPDATE_CHECK_ON_START = True
@@ -143,7 +143,10 @@ def plugin_app(parent: Any) -> Any:
     outer_frame = make_frame(parent)
     frame = make_frame(outer_frame)
     main_app_frame = frame
-    frame.grid(row=0, column=0, sticky="w")
+    frame.grid(row=0, column=0, sticky="ew")
+    outer_frame.columnconfigure(0, weight=1)
+    frame.columnconfigure(0, weight=1, uniform="main_buttons")
+    frame.columnconfigure(1, weight=1, uniform="main_buttons")
 
     main_controls.clear()
     send_controls.clear()
@@ -153,7 +156,7 @@ def plugin_app(parent: Any) -> Any:
         text="Schiff erstellen / senden",
         command=lambda: send_initial_embed("ship"),
     )
-    ship_send_button.grid(row=0, column=0, sticky="w", padx=2, pady=2)
+    ship_send_button.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
     main_controls.append(ship_send_button)
     send_controls.append(ship_send_button)
     ship_send_controls.append(ship_send_button)
@@ -163,7 +166,7 @@ def plugin_app(parent: Any) -> Any:
         text="Carrier erstellen / senden",
         command=lambda: send_initial_embed("carrier"),
     )
-    carrier_send_button.grid(row=0, column=1, sticky="w", padx=2, pady=2)
+    carrier_send_button.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
     main_controls.append(carrier_send_button)
     send_controls.append(carrier_send_button)
 
@@ -172,7 +175,7 @@ def plugin_app(parent: Any) -> Any:
         text="Schiff zurücksetzen",
         command=lambda: reset_tracker("ship"),
     )
-    ship_reset_button.grid(row=1, column=0, sticky="w", padx=2, pady=2)
+    ship_reset_button.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
     main_controls.append(ship_reset_button)
 
     carrier_reset_button = make_button(
@@ -180,7 +183,7 @@ def plugin_app(parent: Any) -> Any:
         text="Carrier zurücksetzen",
         command=lambda: reset_tracker("carrier"),
     )
-    carrier_reset_button.grid(row=1, column=1, sticky="w", padx=2, pady=2)
+    carrier_reset_button.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
     main_controls.append(carrier_reset_button)
 
     action_frame = make_frame(frame)
@@ -204,7 +207,7 @@ def plugin_app(parent: Any) -> Any:
     ).grid(row=0, column=2, sticky="w", padx=6, pady=2)
     status_label_widget = make_status_label(frame, textvariable=status_var)
     status_label_widget.grid(
-        row=3, column=0, columnspan=2, sticky="w", padx=2, pady=(4, 2)
+        row=3, column=0, columnspan=2, sticky="ew", padx=2, pady=(4, 2)
     )
     update_ui_enabled()
     if UPDATE_CHECK_ON_START:
@@ -1738,7 +1741,7 @@ def make_label(parent: Any, **kwargs: Any) -> Any:
 
 
 def make_status_label(parent: Any, **kwargs: Any) -> Any:
-    widget = tk.Label(parent, anchor="w", **kwargs)
+    widget = tk.Label(parent, anchor="w", width=1, **kwargs)
     apply_skin(widget, parent, "status")
     return widget
 

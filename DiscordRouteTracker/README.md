@@ -4,7 +4,7 @@ EDMC plugin for Discord route progress embeds for ship and fleet carrier routes.
 
 ## Version
 
-Current plugin version: `0.1.2`
+Current plugin version: `0.1.3`
 
 ## Updates
 
